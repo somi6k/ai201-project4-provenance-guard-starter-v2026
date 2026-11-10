@@ -39,6 +39,14 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+1. **Submit.** A writer sends `{"text": ..., "creator_id": ...}` to `POST /submit` (`app.py::submit`). Before any scoring, the route rejects malformed input (missing, empty, non-string, or oversized `text`) with a clear error instead of crashing.
+2. **Signal one: the model signal.** The text goes to `detector.py::model_signal`, which calls `detector.py::perplexity` to measure how predictable the text is to gpt2. Then it squashes that perplexity onto a 0–1 scale. Low perplexity (very predictable) → high score → more likely AI.
+3. **Signal two: the style signal.** The text goes to `stylometry.py::style_signal`, which runs three shape measures: `sentence_length_spread` (do sentence lengths vary?), `type_token_ratio` (how much vocabulary repeats?) and `punctuation_density` (how much punctuation, and of what kind?). It flips each measure where needed so that higher means more AI-like, puts them on a common scale, and combines them into one 0–1 score.
+4. **Combine.** Both scores go to `scoring.py::combine_signals`, which merges them into a single 0–1 score (higher = more likely AI).
+5. **Label.** The combined score goes to `scoring.py::score_to_label`, which compares it against the thresholds in `config.py`. It returns a short guess (`ai` / `human` / `unsure`) and the plain-language sentence the writer actually sees.
+6. **Log.** The route makes a `content_id` and records the decision with `audit.log_decision(...)`: both signal scores, the combined score, the guess and the label. That entry is what `/appeal` later looks up.
+7. **Respond.** The writer gets back `content_id`, `guess`, `label`, `confidence`, `model_score` and `style_score`. They can use the `content_id` to contest the result through `POST /appeal`.
+
 
 
 ---
@@ -53,28 +61,30 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** The perplexity signal measures how predictable the text is, that is, how easy it is for the model to predict the next likely word.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI produces predictable text, wheras human writing tends to meander more, with odd word choice and abrupt turns, producing a higher perplexity score.
 
-**What it can't see:**
+**What it can't see:** A new writer, a younger writer, a second language writer or someone writing plainly on purpose may be scored lower on the perlexity signal, thus could be falsely flagged as AI. The signal rewards common words in short, simple sentences, which is typical of an llm writes. The reverse also happens: dense, ornate prose full of rare words can score as human.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The style signal measures sentence length variety, word choice repetitiveness and punctuation density. 
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI writing tends to use similar mid-length sentences with a relatively small vocabulary as the models write by choosing the most likely next word. Human writing has more variety, with varying sentence length, vocabulary usage and punctuation distribution.
 
-**What it can't see:**
+**What it can't see:** Because this signal does not read the text, it can be easily fooled. Deliberate punctuation breaking up sentences, pasted quotes and typos all move the signal without actually changing the text's substance.
 
 ### The combining rule
 
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:**
+**The rule:** Average the two scores equally. 
 
-**The numbers:**
+**The numbers:** Weights	model 0.5, style 0.5
+                 Disagreement gap	> 0.4
+                 Cap when split = 0.64 (just under AI_THRESHOLD = 0.65)
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -83,7 +93,7 @@
 
 **A case where my two signals split, and what my rule does with it:**
 
-
+If they disagree by more than 0.4, the combined score is capped just below the AI threshold, so a split can produce "unsure" or "human" but never "AI." Accusing a writer requires both signals to agree.
 
 ---
 
