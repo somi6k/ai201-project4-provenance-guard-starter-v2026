@@ -236,24 +236,56 @@ The first entry is an appeal from an earlier test. The last two are this run: th
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 100 per day
 
-**Why those numbers and not others:**
+**Why those numbers and not others:** A real writer would be unlikely to be making submissions at a rate faster than 1 per 12 seconds, let alone 100 per day. These rates allow even an aggressive rate of posts without allowing an automated script to flood the server.
+
 <!-- Think about two people: a real writer submitting their own work a few
      times an hour, and a script sending a thousand variations to map your
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** Each `creator_id` is counted separately (`app.py::rate_limit_key`). If a request doesn't include a usable `creator_id`, it counts against the caller's IP address instead. Counting per creator means people sharing one network, like a household or a classroom, don't use up each other's limit. The weakness is that `creator_id` is whatever the caller sends, so a script can rotate through made-up IDs and get a fresh limit for each one. Counting by IP address would fail the other way: one script sending from many addresses would look like many callers, and a whole household behind one address would look like one caller.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
+$ python run_attacks.py --flood 15
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
 
+  [ 1/15] 200
+  [ 2/15] 200
+  [ 3/15] 200
+  [ 4/15] 200
+  [ 5/15] 200
+  [ 6/15] 429
+  [ 7/15] 429
+  [ 8/15] 429
+  [ 9/15] 429
+  [10/15] 429
+  [11/15] 429
+  [12/15] 429
+  [13/15] 429
+  [14/15] 429
+  [15/15] 429
+
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
+10 of 15 were rate limited.
+```
+
+The first five requests got through, and every request after that was rejected, which matches the 5-per-minute limit. Each rejection is also written to the audit log. Here is one from `GET /log`:
+
+```json
+{
+  "creator_id": "flood_tester",
+  "event": "rejected",
+  "limit": "5 per 1 minute",
+  "reason": "rate_limited",
+  "status": "rejected",
+  "timestamp": "2026-11-11T20:58:21+00:00"
+}
 ```
 
 ---
