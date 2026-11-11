@@ -31,6 +31,8 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import scoring
+import stylometry
 
 app = Flask(__name__)
 
@@ -235,8 +237,11 @@ def submit():
     except detector.DetectorUnavailable as exc:
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
 
-    # ── Placeholders until Milestones 4 and 5 ──
-    style_score = None
+    # ── Signal two, then combine ──
+    style_score = stylometry.style_signal(text)
+    combined_score = scoring.combine_signals(model_score, style_score)
+
+    # ── Placeholders until Milestone 5 ──
     guess = "unsure"
     confidence = 0.0
     label = "PLACEHOLDER label"
@@ -249,7 +254,7 @@ def submit():
         guess=guess,
         model_score=model_score,
         style_score=style_score,
-        combined_score=None,
+        combined_score=combined_score,
         label=label,
     )
 
@@ -260,6 +265,7 @@ def submit():
         "label": label,
         "model_score": model_score,
         "style_score": style_score,
+        "combined_score": combined_score,
     })
 
 

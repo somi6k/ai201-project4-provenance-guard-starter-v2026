@@ -61,6 +61,12 @@ MAX_TEXT_CHARS = 10_000
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
 
+# When the two signals differ by more than this, one is probably in its blind
+# spot. combine_signals then caps the score just below AI_THRESHOLD, so a split
+# can give "unsure" or "human" but never "AI".
+DISAGREEMENT_GAP = 0.4
+SPLIT_CAP_MARGIN = 0.01   # cap = AI_THRESHOLD - this = 0.64
+
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
 # Where one label becomes another. Scores run 0.0 (confidently human) to 1.0
