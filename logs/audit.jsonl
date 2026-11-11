@@ -1,0 +1,9 @@
+{"timestamp": "2026-11-11T02:36:37+00:00", "content_id": "5a3c6bfb-ae79-44a6-a80d-8c5ab1d1f986", "creator_id": "somi", "guess": "unsure", "model_score": 0.8809, "style_score": null, "combined_score": null, "label": "PLACEHOLDER label", "status": "decided"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "somi", "event": "rejected", "status": "rejected", "reason": "missing_text"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "somi", "event": "rejected", "status": "rejected", "reason": "empty_text"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "somi", "event": "rejected", "status": "rejected", "reason": "empty_text"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "somi", "event": "rejected", "status": "rejected", "reason": "text_not_string"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "invalid_json"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "invalid_json"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "somi", "event": "rejected", "status": "rejected", "reason": "text_too_short"}
+{"timestamp": "2026-11-11T02:36:38+00:00", "creator_id": "somi", "event": "rejected", "status": "rejected", "reason": "text_too_long"}

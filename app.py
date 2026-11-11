@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -199,17 +200,73 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
 
-    # TODO: delete this and build the route.
+    # ── Bad input (criterion 5): reject with a 400, never crash with a 500 ──
+    if not isinstance(payload, dict):
+        return _bad_input("unknown", "invalid_json",
+                          "Send a JSON object with a 'text' field.")
+
+    creator_id = payload.get("creator_id")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        creator_id = "anonymous"
+
+    text = payload.get("text")
+    if text is None:
+        return _bad_input(creator_id, "missing_text",
+                          "Your submission needs a 'text' field.")
+    if not isinstance(text, str):
+        return _bad_input(creator_id, "text_not_string",
+                          "'text' must be a piece of writing, not a number or list.")
+    if not text.strip():
+        return _bad_input(creator_id, "empty_text",
+                          "Your submission is empty. Paste in some writing to check.")
+    if len(text) > config.MAX_TEXT_CHARS:
+        return _bad_input(creator_id, "text_too_long",
+                          f"Submissions can be at most {config.MAX_TEXT_CHARS:,} characters.")
+
+    # ── Signal one ──
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError:
+        # perplexity() raises on fewer than 3 tokens
+        return _bad_input(creator_id, "text_too_short",
+                          "That's too short to check. Submit at least a few sentences.")
+    except detector.DetectorUnavailable as exc:
+        return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
+
+    # ── Placeholders until Milestones 4 and 5 ──
+    style_score = None
+    guess = "unsure"
+    confidence = 0.0
+    label = "PLACEHOLDER label"
+
+    # ── Log every decision (/appeal looks these up by content_id) ──
+    content_id = str(uuid.uuid4())
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        combined_score=None,
+        label=label,
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+        "style_score": style_score,
+    })
+
+
+def _bad_input(creator_id: str, reason: str, message: str):
+    """A 400 the writer can read, plus a trace in the audit log."""
+    audit.log_rejection(creator_id=creator_id, reason=reason)
+    return jsonify({"error": reason, "message": message}), 400
 
 
 @app.post("/appeal")
