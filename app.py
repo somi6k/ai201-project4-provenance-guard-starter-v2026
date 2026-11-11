@@ -241,10 +241,11 @@ def submit():
     style_score = stylometry.style_signal(text)
     combined_score = scoring.combine_signals(model_score, style_score)
 
-    # ── Placeholders until Milestone 5 ──
-    guess = "unsure"
-    confidence = 0.0
-    label = "PLACEHOLDER label"
+    # ── Label ──
+    guess, label = scoring.score_to_label(combined_score)
+    # confidence = the combined score (0 human … 1 AI), the number the label
+    # was decided on. Unit 8's reports print it beside the thresholds.
+    confidence = combined_score
 
     # ── Log every decision (/appeal looks these up by content_id) ──
     content_id = str(uuid.uuid4())
@@ -295,14 +296,62 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({
+            "error": "invalid_json",
+            "message": "Send a JSON object with 'content_id' and 'reasoning'.",
+        }), 400
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({
+            "error": "missing_content_id",
+            "message": "Your appeal needs the 'content_id' you got back when you submitted.",
+        }), 400
+    content_id = content_id.strip()
+
+    reasoning = payload.get("reasoning")
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({
+            "error": "missing_reasoning",
+            "message": "Tell us briefly why you think the result is wrong.",
+        }), 400
+    if len(reasoning) > config.MAX_TEXT_CHARS:
+        return jsonify({
+            "error": "reasoning_too_long",
+            "message": f"Please keep your explanation under {config.MAX_TEXT_CHARS:,} characters.",
+        }), 400
+
+    # 1. The content_id must belong to a real decision. Decision entries are
+    #    the ones with no "event" field (appeals and rejections have one).
+    decision = next(
+        (e for e in audit.entries_for(content_id) if e.get("event") is None),
+        None,
+    )
+    if decision is None:
+        return jsonify({
+            "error": "unknown_content_id",
+            "message": "We couldn't find a submission with that ID. "
+                       "Check it matches the content_id from your result exactly.",
+        }), 404
+
+    # 2. Record it. The creator comes from the original decision, not the
+    #    request, so an appeal is always filed against the real submitter.
+    entry = audit.log_appeal(
+        content_id=content_id,
+        creator_id=decision.get("creator_id", "unknown"),
+        reasoning=reasoning.strip(),
+    )
+
+    # 3. Confirm to the writer.
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": entry["status"],
+        "message": "Thanks. Your appeal has been received, and a person will "
+                   "review this result. The original decision is on hold "
+                   "while that happens.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
