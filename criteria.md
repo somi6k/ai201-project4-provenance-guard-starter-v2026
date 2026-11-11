@@ -42,61 +42,66 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. False Positives
 
-<!-- Your criterion. It must name a number. -->
-
-
-
-**Why this target:**
+Of 10 pieces of human writing (at least 4 written plainly: short sentences, common words), at most 1 is labelled high-confidence AI, in each of three trials.
 
 
-
----
-
-## 2.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
+**Why this target:** Falsely accusing a human writer of being AI carries a huge penalty for the website, thus no more than 10% false accusations are tolerated.
 
 
 
 ---
 
-## 3.
+## 2. Score spread
 
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
+The average combined score of 5 clearly-AI pieces is at least 0.40 higher than the average of 5 clearly-human pieces, in each of three trials.
 
 
 
----
-
-## 4.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
+**Why this target:** If the gap is small, the thresholds have nothing to separate, and every label becomes a coin flip.
 
 
 
 ---
 
-## 5.
+## 3. Label coverage
 
-<!-- Your criterion. -->
+Each of the three labels is produced by at least one named test input (listed in the README), in each of three trials.
 
 
 
-**Why this target:**
+**Why this target:** The scoring rules and logic account for all potential scenarios so submissions should fit into one of the three labels.
+
+
+
+---
+
+## 4. The appeal path
+
+Of 10 appeals with a valid content_id, 10 return a confirmation, add an appeal entry to log and move the item's status to under_review. Of 3 appeals with a made-up content_id, 3 return an error and add nothing to the log.
+
+
+
+**Why this target:** Falsely accusing a human of AI creates a bad experience for the user, thus every appeal with valid content_id shall be logged and given under_review status. Appeals with erroneous content_ids return an error.
+
+
+
+---
+
+## 5. Bad input
+
+Each of these 7 inputs to `POST /submit` returns a 400 with a JSON `error` field and a plain-English `message`, and none returns a 500, in each of three trials:
+
+1. `text` missing from the body
+2. `text` is an empty string
+3. `text` is whitespace only
+4. `text` is not a string (e.g. `123`)
+5. the body is not valid JSON
+6. `text` is over 10,000 characters
+7. `text` is too short to score (e.g. `"hi"`)
+
+**Why this target:** Bad input is the cheapest attack there is and one of the most common real failures. A crash (500) tells the writer nothing and hides the cause, and the "too short" case is easy to miss: `detector.perplexity` raises an error on fewer than 3 tokens, so without a check a one-word submission would crash the route. I chose 10,000 characters because that's well above a typical post, while the detector only reads the first 400 tokens (`DETECTOR_MAX_TOKENS` in `config.py`) anyway, so longer text costs processing time without adding information. Every case must pass every time, because a single 500 means the route has an input it doesn't handle.
 
 
 
